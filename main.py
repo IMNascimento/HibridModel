@@ -67,15 +67,16 @@ def menu():
     # Carregar os dados
     df = CSVHandler.read_multiple_csvs(data)
     prices = df['close'].values
-
+    #features = ['close', 'high', 'low', 'open']
+    #prices = df[features]
 
     # Initialize the Preprocessor
     processor = DataProcessor(window_size=window_size)
 
 
     # Criar janelas
+    # EM MULTI FEATURES COLOQUE O NOME DAS COLUNAS QUE DESEJA UTILIZAR COMO ALVO
     X, y = processor.create_windows(prices)
-
     # Dividir os dados em treino, validação e teste
     X_train, X_validation, X_test,y_train, y_validation, y_test = processor.split_data(X, y)
 
