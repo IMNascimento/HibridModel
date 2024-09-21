@@ -61,8 +61,9 @@ def menu():
     units = config.get("units", 70)
     dropout = config.get("dropout", 0.4)
     epochs = config.get("epochs", 50)
-    window_size = config.get("window_size", 600)
+    window_size = config.get("input_window_size", 600)
     data = config.get("datasets", [])
+    step_ahead = config.get("output_window_size", 1)
     
     # Carregar os dados
     df = CSVHandler.read_multiple_csvs(data)
@@ -76,7 +77,7 @@ def menu():
 
     # Criar janelas
     # EM MULTI FEATURES COLOQUE O NOME DAS COLUNAS QUE DESEJA UTILIZAR COMO ALVO
-    X, y = processor.create_windows(prices)
+    X, y = processor.create_windows(prices, steps_ahead=step_ahead)
     # Dividir os dados em treino, validação e teste
     X_train, X_validation, X_test,y_train, y_validation, y_test = processor.split_data(X, y)
 
@@ -96,7 +97,7 @@ def menu():
     processor.save_scaler()
 
     # Initialize the Model Trainer
-    model_trainer = ModelTrainer(batch_size, units, dropout, epochs, window_size)
+    model_trainer = ModelTrainer(batch_size, units, dropout, epochs, window_size, step_ahead)
 
 
     while True:
@@ -119,10 +120,14 @@ def menu():
 
         if escolha == '1':
             print("Treinando Regressão Linear...")
+            print(f"X_train_scaled shape: {X_train_scaled.shape}")
+            print(f"y_train_scaled shape: {y_train_scaled.shape}")
             model_trainer.train_linear_regression(X_train_scaled, y_train_scaled, X_validation_scaled, y_validation_scaled)
         
         elif escolha == '2':
             print("Treinando LSTM...")
+            print(f"X_train_scaled shape: {X_train_scaled.shape}")
+            print(f"y_train_scaled shape: {y_train_scaled.shape}")
             model_trainer.train_lstm(X_train_scaled, y_train_scaled, X_validation_scaled, y_validation_scaled)
 
         elif escolha == '3':
@@ -135,13 +140,14 @@ def menu():
             y_pred = modelo.predict(X_test_scaled)
             y_pred = processor.inverse_transform(y_pred)
             y_test = processor.inverse_transform(y_test_scaled)
-
+            print(f"Previsões (y_pred): {y_pred[:5]}")
+            print(f"y_test shape: {y_test.shape}")
             # Avaliar as métricas do modelo LSTM
-            metrics_lstm = ModelEvaluator.evaluate(y_test, y_pred)
+            metrics_lstm = ModelEvaluator.evaluate(y_test, y_pred, steps_ahead=step_ahead)
             print("Métricas do LSTM:")
             # Exibir as métricas calculadas
             ModelEvaluator.print_metrics(metrics_lstm)
-            ResultPlotter.plot_comparison(y_test, y_pred,title="Modelo LSTM" ,save_path=f'modelo_LSTM_Window_{window_size}.png')
+            ResultPlotter.plot_comparison(y_test, y_pred,title="Modelo LSTM" ,save_path=f'modelo_LSTM_Window_{window_size}_Pre_{step_ahead}.png')
 
         elif escolha == '4':
             print("Executar modelo Regressão Linear...")
@@ -154,10 +160,10 @@ def menu():
             y_pred = processor.inverse_transform(y_pred)
             y_test = processor.inverse_transform(y_test_scaled)
             # Avaliar as métricas do modelo Regressão Linear
-            metrics_regressao = ModelEvaluator.evaluate(y_test, y_pred)
+            metrics_regressao = ModelEvaluator.evaluate(y_test, y_pred, steps_ahead=step_ahead)
             print("Métricas da Regressão Linear:")
             ModelEvaluator.print_metrics(metrics_regressao)
-            ResultPlotter.plot_comparison(y_test, y_pred, title="Modelo de Regressão Linear", save_path=f'modelo_regressao_linear_Window_{window_size}.png')
+            ResultPlotter.plot_comparison(y_test, y_pred, title="Modelo de Regressão Linear", save_path=f'modelo_regressao_linear_Window_{window_size}_Pre_{step_ahead}.png')
 
         elif escolha == '5':
             print("Executar modelo híbrido...")
@@ -192,12 +198,12 @@ def menu():
             y_test = processor.inverse_transform(y_test_scaled)
 
             # Avaliar as métricas do modelo Híbrido
-            metrics_hibrido = ModelEvaluator.evaluate(y_test, y_pred_hibrido)
+            metrics_hibrido = ModelEvaluator.evaluate(y_test, y_pred_hibrido, steps_ahead=step_ahead)
             print("\nMétricas do Modelo Híbrido:")
             ModelEvaluator.print_metrics(metrics_hibrido)
 
             # Plotar comparação Híbrido
-            ResultPlotter.plot_comparison(y_test, y_pred_hibrido, title="Modelo Híbrido (LSTM + Regressão Linear)", save_path=f'modelo_hibrido_Window_{window_size}.png')
+            ResultPlotter.plot_comparison(y_test, y_pred_hibrido, title="Modelo Híbrido (LSTM + Regressão Linear)", save_path=f'modelo_hibrido_Window_{window_size}_Pre_{step_ahead}.png')
 
         elif escolha == '6':
             print("Executar Todos os Modelos...")
@@ -232,28 +238,28 @@ def menu():
             y_test = processor.inverse_transform(y_test_scaled)
 
             # Avaliar as métricas do modelo Regressão Linear
-            metrics_regressao = ModelEvaluator.evaluate(y_test, y_pred_linear)
+            metrics_regressao = ModelEvaluator.evaluate(y_test, y_pred_linear, steps_ahead=step_ahead)
             print("Métricas da Regressão Linear:")
             ModelEvaluator.print_metrics(metrics_regressao)
 
             # Avaliar as métricas do modelo LSTM
-            metrics_lstm = ModelEvaluator.evaluate(y_test, y_pred_lstm)
+            metrics_lstm = ModelEvaluator.evaluate(y_test, y_pred_lstm, steps_ahead=step_ahead)
             print("\nMétricas do LSTM:")
             ModelEvaluator.print_metrics(metrics_lstm)
 
             # Avaliar as métricas do modelo Híbrido
-            metrics_hibrido = ModelEvaluator.evaluate(y_test, y_pred_hibrido)
+            metrics_hibrido = ModelEvaluator.evaluate(y_test, y_pred_hibrido, steps_ahead=step_ahead)
             print("\nMétricas do Modelo Híbrido:")
             ModelEvaluator.print_metrics(metrics_hibrido)
 
             # Plotar comparação LSTM
-            ResultPlotter.plot_comparison(y_test, y_pred_lstm, title="Modelo LSTM", save_path=f'modelo_LSTM_Win_{window_size}.png')
+            ResultPlotter.plot_comparison(y_test, y_pred_lstm, title="Modelo LSTM", save_path=f'modelo_LSTM_Win_{window_size}_Pre_{step_ahead}.png')
 
             # Plotar comparação Regressão Linear
-            ResultPlotter.plot_comparison(y_test, y_pred_linear, title="Modelo de Regressão Linear", save_path=f'modelo_regressao_linear_Win_{window_size}.png')
+            ResultPlotter.plot_comparison(y_test, y_pred_linear, title="Modelo de Regressão Linear", save_path=f'modelo_regressao_linear_Win_{window_size}_Pre_{step_ahead}.png')
 
             # Plotar comparação Híbrido
-            ResultPlotter.plot_comparison(y_test, y_pred_hibrido, title="Modelo Híbrido (LSTM + Regressão Linear)", save_path=f'modelo_hibrido_Win_{window_size}.png')
+            ResultPlotter.plot_comparison(y_test, y_pred_hibrido, title="Modelo Híbrido (LSTM + Regressão Linear)", save_path=f'modelo_hibrido_Win_{window_size}_Pre_{step_ahead}.png')
 
             print("Comparação entre LSTM, Regressão Linear e Híbrido concluída e salva.")
 
@@ -271,7 +277,7 @@ def menu():
             prices = df['close'].values
 
             # Criar janelas
-            X, y = processor.create_windows(prices)
+            X, y = processor.create_windows(prices, steps_ahead=step_ahead)
 
             # Aplicar normalização nos dados de validação e teste
             X_scaled, y_scaled = processor.apply_normalization(X, y)
@@ -309,36 +315,36 @@ def menu():
             y_test = processor.inverse_transform(y_scaled)
 
             # Avaliar as métricas do modelo Regressão Linear
-            metrics_regressao = ModelEvaluator.evaluate(y_test, y_pred_linear)
+            metrics_regressao = ModelEvaluator.evaluate(y_test, y_pred_linear, steps_ahead=step_ahead)
             print("Métricas da Regressão Linear Nova Base:")
             ModelEvaluator.print_metrics(metrics_regressao)
 
             # Avaliar as métricas do modelo LSTM
-            metrics_lstm = ModelEvaluator.evaluate(y_test, y_pred_lstm)
+            metrics_lstm = ModelEvaluator.evaluate(y_test, y_pred_lstm, steps_ahead=step_ahead)
             print("\nMétricas do LSTM Nova Base:")
             ModelEvaluator.print_metrics(metrics_lstm)
 
             # Avaliar as métricas do modelo Híbrido
-            metrics_hibrido = ModelEvaluator.evaluate(y_test, y_pred_hibrido)
+            metrics_hibrido = ModelEvaluator.evaluate(y_test, y_pred_hibrido, steps_ahead=step_ahead)
             print("\nMétricas do Modelo Híbrido Nova Base:")
             ModelEvaluator.print_metrics(metrics_hibrido)
 
             # Plotar comparação LSTM
-            ResultPlotter.plot_comparison(y_test, y_pred_lstm, title="Modelo LSTM", save_path='modelo_LSTM_new_base.png')
+            ResultPlotter.plot_comparison(y_test, y_pred_lstm, title="Modelo LSTM", save_path=f'modelo_LSTM_new_base_pre_{step_ahead}.png')
 
             # Plotar comparação Regressão Linear
-            ResultPlotter.plot_comparison(y_test, y_pred_linear, title="Modelo de Regressão Linear", save_path='modelo_regressao_linear_new_base.png')
+            ResultPlotter.plot_comparison(y_test, y_pred_linear, title="Modelo de Regressão Linear", save_path=f'modelo_regressao_linear_new_base_pre_{step_ahead}.png')
 
             # Plotar comparação Híbrido
-            ResultPlotter.plot_comparison(y_test, y_pred_hibrido, title="Modelo Híbrido (LSTM + Regressão Linear)", save_path='modelo_hibrido_new_base.png')
+            ResultPlotter.plot_comparison(y_test, y_pred_hibrido, title="Modelo Híbrido (LSTM + Regressão Linear)", save_path=f'modelo_hibrido_new_base_pre_{step_ahead}.png')
 
             print("Comparação entre LSTM, Regressão Linear e Híbrido em nova base de dados concluída e salva.")
 
         elif escolha == '8':
             print("Gerar Matriz de Autocorrelação.")
             #lista_window_sizes = [50, 100, 150, 200, 250, 300, 350, 400, 450, 500, 550, 600]
-            lista_window_sizes = list(range(10, 1001, 10))
-            #lista_window_sizes = list(range(100, 1001, 100))
+            #lista_window_sizes = list(range(10, 1001, 10))
+            lista_window_sizes = list(range(100, 1001, 100))
             #lista_window_sizes = list(range(24, 1001, 24))
             autocorrelacoes = TimeSeriesAnalyzer.calculate_correlation(prices, lista_window_sizes)
             ResultPlotter.plot_autocorrelation(autocorrelacoes)
@@ -357,7 +363,8 @@ def menu():
             units = config.get("units", 70)
             dropout = config.get("dropout", 0.4)
             epochs = config.get("epochs", 50)
-            window_size = config.get("window_size", 600)
+            window_size = config.get("input_window_size", 600)
+            step_ahead = config.get("output_window_size", 1)
             datasets = config.get("datasets", [])
 
             # Recarregar os dados com as novas configurações
@@ -366,7 +373,7 @@ def menu():
 
             # Recriar o processador e os dados
             processor = DataProcessor(window_size=window_size)
-            X, y = processor.create_windows(prices)
+            X, y = processor.create_windows(prices, steps_ahead=step_ahead)
             X_train, X_validation, X_test, y_train, y_validation, y_test = processor.split_data(X, y)
             X_train_scaled, y_train_scaled = processor.normalize(X_train, y_train)
             X_validation_scaled, y_validation_scaled = processor.apply_normalization(X_validation, y_validation)
@@ -376,7 +383,7 @@ def menu():
             X_test_scaled = processor.reshape_to_original_shape(X_test_scaled, X_test.shape)
 
             # Atualizar o Model Trainer com as novas configurações
-            model_trainer = ModelTrainer(batch_size, units, dropout, epochs, window_size)
+            model_trainer = ModelTrainer(batch_size, units, dropout, epochs, window_size, step_ahead)
             print("Configurações recarregadas com sucesso!")
 
         elif escolha == '11':

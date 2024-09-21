@@ -3,7 +3,8 @@
     "units": 70,
     "dropout": 0.4,
     "epochs": 50,
-    "window_size": 350,
+    "input_window_size": 350,
+    "output_window_size": 10,
     "datasets": [
         "data/bitcoin/hourly/BTCUSDT_hourly_2021_2021.csv",
         "data/bitcoin/hourly/BTCUSDT_hourly_2022_2022.csv",

@@ -12,50 +12,58 @@ from src.plotting import ResultPlotter
 
 
 class ModelTrainer:
-    def __init__(self, batch_size=None, units=None, dropout=None, epochs=None, window_size=None):
+    def __init__(self, batch_size=None, units=None, dropout=None, epochs=None, window_size=None, steps_ahead=1):
         self.batch_size = batch_size
         self.units = units
         self.dropout = dropout
         self.epochs = epochs
         self.window_size = window_size
+        self.steps_ahead = steps_ahead
 
     def train_lstm(self, X_train, y_train, X_val, y_val):
         """
         Treina o modelo LSTM.
         """
         model = Sequential()
-        model.add(LSTM(units=self.units, return_sequences=True, input_shape=(X_train.shape[1], 1)))
+        model.add(LSTM(units=self.units, return_sequences=True, input_shape=(X_train.shape[1], X_train.shape[2])))
         model.add(Dropout(self.dropout))
         model.add(LSTM(units=self.units, return_sequences=False))
         model.add(Dropout(self.dropout))
-        model.add(Dense(units=1))
+        model.add(Dense(units=self.steps_ahead))  # 'steps_ahead' saídas
 
         model.compile(optimizer='adam', loss='mean_squared_error')
         early_stopping = EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True)
         
         model.fit(X_train, y_train, epochs=self.epochs, batch_size=self.batch_size, validation_data=(X_val, y_val), callbacks=[early_stopping])
-        self.save_model(model, descricao='lstm')
+        self.save_model(model, descricao=f'lstm_{self.steps_ahead}_predition')
         return model
 
     def train_linear_regression(self, X_train, y_train, X_val, y_val):
         """
-        Treina o modelo de Regressão Linear e salva o modelo.
+        Treina o modelo de Regressão Linear para prever uma janela completa (steps_ahead) de valores.
         """
         try:
             # Achatar os dados de treino e validação para serem compatíveis com a regressão linear
             X_train_flat = X_train.reshape(X_train.shape[0], -1)
             X_val_flat = X_val.reshape(X_val.shape[0], -1)
-            
+
+            # Se steps_ahead > 1, mantemos todos os valores de y_train para prever múltiplos steps à frente
+            if len(y_train.shape) > 1 and self.steps_ahead > 1:
+                y_train_flat = y_train  # Usamos todos os steps para treino
+                y_val_flat = y_val  # Usamos todos os steps para validação
+            else:
+                y_train_flat = y_train.reshape(-1) if len(y_train.shape) > 1 else y_train
+                y_val_flat = y_val.reshape(-1) if len(y_val.shape) > 1 else y_val
 
             # Instanciar e treinar o modelo de Regressão Linear
             model = LinearRegression()
-            model.fit(X_train_flat, y_train)
+            model.fit(X_train_flat, y_train_flat)
 
             # Salvar o modelo de Regressão Linear
-            self.save_model(model, descricao='regressao_linear')
+            self.save_model(model, descricao=f'regressao_linear_{self.steps_ahead}_predition')
 
             return model
-        
+
         except Exception as e:
             Logger.error(f"Erro ao treinar a Regressão Linear: {e}")
             return None

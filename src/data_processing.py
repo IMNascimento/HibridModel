@@ -16,42 +16,48 @@ class DataProcessor:
         self.scaler_X = MinMaxScaler(feature_range=feature_range)  # Scaler para os dados de entrada (X)
         self.scaler_y = MinMaxScaler(feature_range=feature_range)  # Scaler para a coluna alvo (y)
 
-    def create_windows(self, data, coluna_alvo=None):
+    def create_windows(self, data, coluna_alvo=None, steps_ahead=1):
         """
-        Cria janelas de dados para entrada em modelos.
+        Cria janelas de dados para entrada em modelos, prevendo múltiplas janelas à frente.
 
         :param data: Array com os dados de preços ou valores.
-        :return: Arrays X (entradas) e y (saídas).
+        :param coluna_alvo: Nome da coluna alvo que será prevista.
+        :param steps_ahead: Quantidade de janelas a serem previstas à frente.
+        :return: Arrays X (entradas) e y (saídas com steps_ahead valores).
         """
         X, y = [], []
+
         # Se 'data' for um DataFrame (várias colunas)
         if isinstance(data, pd.DataFrame):
-            # Se a coluna alvo for passada como string (nome da coluna)
             if isinstance(coluna_alvo, str):
                 target_col = data[coluna_alvo].values
             else:
-                # Usar a última coluna como padrão se 'coluna_alvo' não for especificada
                 target_col = data.iloc[:, -1].values
             
-            # Percorrer e criar as janelas
-            for i in range(self.window_size, len(data)):
-                X.append(data.iloc[i-self.window_size:i].values)  # Últimos 'window_size' períodos para todas as features
-                y.append(target_col[i])  # Valor da coluna alvo no próximo período
+            # Percorre o DataFrame criando janelas e múltiplos passos à frente
+            for i in range(self.window_size, len(data) - steps_ahead + 1):
+                X.append(data.iloc[i - self.window_size:i].values)
+                # Para `steps_ahead`, pegue apenas o último valor previsto para cada janela
+                if steps_ahead == 1:
+                    y.append(target_col[i + steps_ahead - 1])  # Prever um valor
+                else:
+                    y.append(target_col[i:i + steps_ahead])  # Prever múltiplos valores à frente
 
-        # Se 'data' for uma única coluna (array ou série)
         elif len(data.shape) == 1:
-            for i in range(self.window_size, len(data)):
-                # Seleciona os últimos 'window_size' períodos
-                X.append(data[i-self.window_size:i])
-                y.append(data[i])  # Próximo valor da mesma coluna
+            for i in range(self.window_size, len(data) - steps_ahead + 1):
+                X.append(data[i - self.window_size:i])
+                if steps_ahead == 1:
+                    y.append(data[i + steps_ahead - 1])  # Prever um valor
+                else:
+                    y.append(data[i:i + steps_ahead])  # Prever múltiplos valores
 
-        # Convertendo para numpy arrays
+        # Converte X e y para numpy arrays
         X, y = np.array(X), np.array(y)
-
-        # Se o dado de entrada for um DataFrame ou array 2D, precisamos manter o formato 3D para o LSTM
-        if len(X.shape) == 2:
-            X = np.reshape(X, (X.shape[0], X.shape[1], 1))  # (samples, timesteps, features)
         
+        # Se `X` for 2D, ajuste para o formato 3D
+        if len(X.shape) == 2:
+            X = X.reshape(X.shape[0], X.shape[1], 1)
+
         return X, y
 
     def split_data(self, X, y, train_size=0.7, validation_size=0.15):
@@ -82,21 +88,39 @@ class DataProcessor:
         """
         # Ajusta o scaler_X nos dados de treino e normaliza
         X_train_scaled = self.scaler_X.fit_transform(X.reshape(-1, X.shape[2]))  # Flatten para ajustar o scaler
-        y_train_scaled = self.scaler_y.fit_transform(y.reshape(-1, 1))  # Normalizar o alvo (y)
         
+        # Normalizar o `y` de acordo com a forma
+        if len(y.shape) == 1:  # Caso seja um único valor à frente
+            y_train_scaled = self.scaler_y.fit_transform(y.reshape(-1, 1))
+        else:
+            # Flatten `y` adequadamente para steps_ahead > 1
+            y_train_scaled = self.scaler_y.fit_transform(y.reshape(-1, y.shape[-1]))
+
+        # Redimensionar o `X_train_scaled` de volta ao seu formato original
+        X_train_scaled = X_train_scaled.reshape(X.shape)
+
         return X_train_scaled, y_train_scaled
 
     def apply_normalization(self, X, y):
         """
         Aplica a normalização nos dados de validação ou teste, ajustada com base nos dados de treino.
         :param X: Dados de entrada 3D (samples, timesteps, features).
-        :param y: Valores alvo 2D (samples, 1).
+        :param y: Valores alvo 2D (samples, 1 ou mais para steps_ahead).
         :return: Dados de entrada normalizados (X_normalized) e valores alvo normalizados (y_normalized).
         """
         try:
-            X_normalized = self.scaler_X.transform(X.reshape(-1, X.shape[2]))  # Normalizar com base no ajuste do treino
-            y_normalized = self.scaler_y.transform(y.reshape(-1, 1))  # Normalizar os valores de saída
-            return X_normalized, y_normalized
+            # Normalizar `X` com base no ajuste do treino
+            X_normalized = self.scaler_X.transform(X.reshape(-1, X.shape[2]))  # Flatten para ajustar o scaler
+            X_normalized = X_normalized.reshape(X.shape)  # Restaurar a forma original
+
+            # Normalizar o `y`
+            if len(y.shape) == 1:
+                y_normalized = self.scaler_y.transform(y.reshape(-1, 1))
+            else:
+                y_normalized = self.scaler_y.transform(y.reshape(-1, y.shape[-1]))
+
+            return X_normalized, y_normalized.reshape(y.shape)
+            
         except ValueError as e:
             raise ValueError(f"O MinMaxScaler foi ajustado com {self.scaler_X.n_features_in_} features, mas o X tem {X.shape[2]} features.")
     
@@ -112,9 +136,20 @@ class DataProcessor:
 
     def inverse_transform(self, y_scaled):
         """
-        Desfaz a normalização dos dados de saída (y).
+        Desfaz a normalização dos dados de saída (y) e ajusta para o formato correto.
         """
-        return self.scaler_y.inverse_transform(y_scaled)
+        # Verifica se o array é 1D (caso steps_ahead seja 1) e reformata para 2D
+        if len(y_scaled.shape) == 1:
+            y_scaled = y_scaled.reshape(-1, 1)
+        
+        # Desfaz a normalização
+        y_inversed = self.scaler_y.inverse_transform(y_scaled)
+        
+        # Se o y_scaled original era 1D, retorna a array como 1D novamente
+        if y_inversed.shape[1] == 1:
+            return y_inversed.flatten()  # Converte de volta para 1D
+        
+        return y_inversed
 
     def save_scaler(self, path='scaler/scaler.pkl'):
         """
