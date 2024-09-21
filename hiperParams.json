@@ -1,0 +1,12 @@
+{
+    "batch_size": 16,
+    "units": 70,
+    "dropout": 0.4,
+    "epochs": 50,
+    "window_size": 350,
+    "datasets": [
+        "data/bitcoin/hourly/BTCUSDT_hourly_2021_2021.csv",
+        "data/bitcoin/hourly/BTCUSDT_hourly_2022_2022.csv",
+        "data/bitcoin/hourly/BTCUSDT_hourly_2023_2023.csv"
+    ]
+}
