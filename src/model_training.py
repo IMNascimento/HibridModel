@@ -1,7 +1,7 @@
 from keras.models import Sequential, load_model
 from keras.layers import LSTM, Dense, Dropout
 from keras.callbacks import EarlyStopping
-from sklearn.linear_model import LinearRegression
+from sklearn.linear_model import LinearRegression, Lasso, Ridge
 import os
 import joblib
 from src.utils.logger import Logger
@@ -68,7 +68,58 @@ class ModelTrainer:
             Logger.error(f"Erro ao treinar a Regressão Linear: {e}")
             return None
         
+    def train_lasso_regression(self, X_train, y_train, X_val, y_val, alpha=0.1):
+        """
+        Treina o modelo de Regressão Lasso para prever uma janela completa (steps_ahead) de valores.
+        """
+        try:
+            # Achatar os dados de treino e validação para serem compatíveis com o Lasso
+            X_train_flat = X_train.reshape(X_train.shape[0], -1)
+            X_val_flat = X_val.reshape(X_val.shape[0], -1)
 
+            # Verificar a forma de y_train e y_val para steps_ahead
+            y_train_flat = y_train.reshape(-1) if len(y_train.shape) > 1 else y_train
+            y_val_flat = y_val.reshape(-1) if len(y_val.shape) > 1 else y_val
+
+            # Instanciar e treinar o modelo de Regressão Lasso
+            model = Lasso(alpha=alpha)
+            model.fit(X_train_flat, y_train_flat)
+
+            # Salvar o modelo de Regressão Lasso
+            self.save_model(model, descricao=f'lasso_regression_{self.steps_ahead}_predition_alpha_{alpha}')
+
+            return model
+
+        except Exception as e:
+            Logger.error(f"Erro ao treinar a Regressão Lasso: {e}")
+            return None
+
+    def train_ridge_regression(self, X_train, y_train, X_val, y_val, alpha=1.0):
+        """
+        Treina o modelo de Regressão Ridge para prever uma janela completa (steps_ahead) de valores.
+        """
+        try:
+            # Achatar os dados de treino e validação para serem compatíveis com o Ridge
+            X_train_flat = X_train.reshape(X_train.shape[0], -1)
+            X_val_flat = X_val.reshape(X_val.shape[0], -1)
+
+            # Verificar a forma de y_train e y_val para steps_ahead
+            y_train_flat = y_train.reshape(-1) if len(y_train.shape) > 1 else y_train
+            y_val_flat = y_val.reshape(-1) if len(y_val.shape) > 1 else y_val
+
+            # Instanciar e treinar o modelo de Regressão Ridge
+            model = Ridge(alpha=alpha)
+            model.fit(X_train_flat, y_train_flat)
+
+            # Salvar o modelo de Regressão Ridge
+            self.save_model(model, descricao=f'ridge_regression_{self.steps_ahead}_predition_alpha_{alpha}')
+
+            return model
+
+        except Exception as e:
+            Logger.error(f"Erro ao treinar a Regressão Ridge: {e}")
+            return None
+    
     def save_model(self, model, pasta='models', descricao='')->None:
         """
         Salva o modelo treinado em um diretório específico.

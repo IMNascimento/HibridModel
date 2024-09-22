@@ -68,16 +68,19 @@ def menu():
     # Carregar os dados
     df = CSVHandler.read_multiple_csvs(data)
     prices = df['close'].values
-    #features = ['close', 'high', 'low', 'open']
+    df = TimeSeriesAnalyzer.add_all_indicators(df)
+    #features = ['close', 'SMA_100', 'EMA_200', 'open','RSI_14','ATR_14']
     #prices = df[features]
-
+    #print(prices.isna().sum())
+    #prices.fillna(method='bfill', inplace=True)
+    #print(prices.isna().sum())
     # Initialize the Preprocessor
     processor = DataProcessor(window_size=window_size)
 
 
     # Criar janelas
     # EM MULTI FEATURES COLOQUE O NOME DAS COLUNAS QUE DESEJA UTILIZAR COMO ALVO
-    X, y = processor.create_windows(prices, steps_ahead=step_ahead)
+    X, y = processor.create_windows(prices, steps_ahead=step_ahead, coluna_alvo='close')
     # Dividir os dados em treino, validação e teste
     X_train, X_validation, X_test,y_train, y_validation, y_test = processor.split_data(X, y)
 
@@ -102,7 +105,7 @@ def menu():
 
     while True:
         print("\nEscolha uma opção:")
-        print("1 - Treinar Regressão Linear")
+        print("1 - Treinar Regressão Linear,Lasso e Ridge")
         print("2 - Treinar LSTM")
         print("3 - Executar modelo LSTM")
         print("4 - Executar modelo Regressão Linear")
@@ -120,14 +123,14 @@ def menu():
 
         if escolha == '1':
             print("Treinando Regressão Linear...")
-            print(f"X_train_scaled shape: {X_train_scaled.shape}")
-            print(f"y_train_scaled shape: {y_train_scaled.shape}")
+            alpha_lasso = float(input("Digite o valor de alpha para o Lasso (padrão: 0.1): ") or 0.1)
+            alpha_ridge = float(input("Digite o valor de alpha para o Ridge (padrão: 1.0): ") or 1.0)
             model_trainer.train_linear_regression(X_train_scaled, y_train_scaled, X_validation_scaled, y_validation_scaled)
+            model_trainer.train_lasso_regression(X_train_scaled, y_train_scaled, X_validation_scaled, y_validation_scaled, alpha=alpha_lasso)
+            model_trainer.train_ridge_regression(X_train_scaled, y_train_scaled, X_validation_scaled, y_validation_scaled, alpha=alpha_ridge)
         
         elif escolha == '2':
             print("Treinando LSTM...")
-            print(f"X_train_scaled shape: {X_train_scaled.shape}")
-            print(f"y_train_scaled shape: {y_train_scaled.shape}")
             model_trainer.train_lstm(X_train_scaled, y_train_scaled, X_validation_scaled, y_validation_scaled)
 
         elif escolha == '3':
@@ -150,21 +153,52 @@ def menu():
             ResultPlotter.plot_comparison(y_test, y_pred,title="Modelo LSTM" ,save_path=f'modelo_LSTM_Window_{window_size}_Pre_{step_ahead}.png')
 
         elif escolha == '4':
-            print("Executar modelo Regressão Linear...")
-            arquivo = FileManager.list_files('models')
-            if arquivo is None:
+            print("Executar modelo Regressão Linear, Lasso e Ridge...")
+            arquivo_linear = FileManager.list_files('models')
+            if arquivo_linear is None:
                 continue
-            modelo = model_trainer.loading_model(arquivo)
+            modelo_linear = model_trainer.loading_model(arquivo_linear)
             X_test_flat = X_test_scaled.reshape(X_test_scaled.shape[0], -1)  # Achatar para regressão linear
-            y_pred = modelo.predict(X_test_flat)
-            y_pred = processor.inverse_transform(y_pred)
-            y_test = processor.inverse_transform(y_test_scaled)
-            # Avaliar as métricas do modelo Regressão Linear
-            metrics_regressao = ModelEvaluator.evaluate(y_test, y_pred, steps_ahead=step_ahead)
-            print("Métricas da Regressão Linear:")
-            ModelEvaluator.print_metrics(metrics_regressao)
-            ResultPlotter.plot_comparison(y_test, y_pred, title="Modelo de Regressão Linear", save_path=f'modelo_regressao_linear_Window_{window_size}_Pre_{step_ahead}.png')
+            y_pred_linear = modelo_linear.predict(X_test_flat)
+            y_pred_linear = processor.inverse_transform(y_pred_linear)
 
+            # Avaliar as métricas do modelo Regressão Linear
+            y_test = processor.inverse_transform(y_test_scaled)
+            metrics_linear = ModelEvaluator.evaluate(y_test, y_pred_linear, steps_ahead=step_ahead)
+            print("Métricas da Regressão Linear:")
+            ModelEvaluator.print_metrics(metrics_linear)
+            ResultPlotter.plot_comparison(y_test, y_pred_linear, title="Modelo de Regressão Linear", save_path=f'modelo_regressao_linear_Window_{window_size}_Pre_{step_ahead}.png')
+
+            # Carregar o modelo Lasso
+            print("Carregando e executando Regressão Lasso...")
+            arquivo_lasso = FileManager.list_files('models')  # Modifique aqui se o arquivo Lasso tiver um nome diferente
+            if arquivo_lasso is None:
+                continue
+            modelo_lasso = model_trainer.loading_model(arquivo_lasso)
+            y_pred_lasso = modelo_lasso.predict(X_test_flat)
+            y_pred_lasso = processor.inverse_transform(y_pred_lasso)
+
+            # Avaliar as métricas do modelo Lasso
+            metrics_lasso = ModelEvaluator.evaluate(y_test, y_pred_lasso, steps_ahead=step_ahead)
+            print("Métricas da Regressão Lasso:")
+            ModelEvaluator.print_metrics(metrics_lasso)
+            ResultPlotter.plot_comparison(y_test, y_pred_lasso, title="Modelo de Regressão Lasso", save_path=f'modelo_regressao_lasso_Window_{window_size}_Pre_{step_ahead}.png')
+
+            # Carregar o modelo Ridge
+            print("Carregando e executando Regressão Ridge...")
+            arquivo_ridge = FileManager.list_files('models')  # Modifique aqui se o arquivo Ridge tiver um nome diferente
+            if arquivo_ridge is None:
+                continue
+            modelo_ridge = model_trainer.loading_model(arquivo_ridge)
+            y_pred_ridge = modelo_ridge.predict(X_test_flat)
+            y_pred_ridge = processor.inverse_transform(y_pred_ridge)
+
+            # Avaliar as métricas do modelo Ridge
+            metrics_ridge = ModelEvaluator.evaluate(y_test, y_pred_ridge, steps_ahead=step_ahead)
+            print("Métricas da Regressão Ridge:")
+            ModelEvaluator.print_metrics(metrics_ridge)
+            ResultPlotter.plot_comparison(y_test, y_pred_ridge, title="Modelo de Regressão Ridge", save_path=f'modelo_regressao_ridge_Window_{window_size}_Pre_{step_ahead}.png')
+            
         elif escolha == '5':
             print("Executar modelo híbrido...")
             

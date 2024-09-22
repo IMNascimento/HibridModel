@@ -4,7 +4,7 @@
     "dropout": 0.4,
     "epochs": 50,
     "input_window_size": 350,
-    "output_window_size": 10,
+    "output_window_size": 1,
     "datasets": [
         "data/bitcoin/hourly/BTCUSDT_hourly_2021_2021.csv",
         "data/bitcoin/hourly/BTCUSDT_hourly_2022_2022.csv",
